@@ -1,0 +1,206 @@
+#!/usr/bin/env perl
+#
+# This has only one function: acquire dumb-frotz 2.32r1, transmogrify it
+#  so that the TOPS-20 linker can handle the symbols, and output the
+#  mogrified sources.
+#
+# This isn't as easy as it sounds, because:
+#
+# https://github.com/PDP-10/panda/blob/master/files/kcc-6/kcc/user.doc#L519
+#
+# "However, the situation is different for symbols with external
+# linkage, which must be exported to the PDP-10 linker.  Such names are
+# truncated to 6 characters and case is no longer significant."
+#
+# So you need to map all the symbols in the header files, everything declared
+#  "extern" in the source files, and also make sure that your input file names
+#  are unambiguous.
+#
+# MIT licensed.
+use strict;
+use warnings;
+
+use Cwd;
+use File::Path qw(rmtree);
+
+our $FROTZREPO="https://gitlab.com/DavidGriffith/frotz.git";
+our $FROTZTAG="dumb-2.32r1";
+
+our %symbolmap = ();
+our $counter = 0;
+our $topdir = getcwd;
+our $srcdir = "$topdir/frotz-orig";
+our $tgtdir = "$topdir/output";
+our $sedfile = "$tgtdir/urbzig.sed";
+our $sedinplace = "-i";
+if ( `uname` eq "Darwin\n" ) {
+    # Probably any BSD sed
+    $sedinplace .= " ''";
+}
+
+our %contents = ();
+
+sub the_whole_enchilada {
+    fetch_sources();
+    prepare_output_directory();
+    rewrite_files();
+    create_sed_file();
+    fix_specific_files();
+    run_sed();
+}
+
+sub fetch_sources {
+    chdir $topdir;
+    if ( ! -d $srcdir ) {
+	`git clone $FROTZREPO $srcdir`;
+    }
+    chdir $srcdir;
+    `git checkout $FROTZTAG`;
+    chdir $topdir;
+}
+
+sub prepare_output_directory {
+    if (-d $tgtdir) {
+	rmtree $tgtdir;
+    }
+    mkdir $tgtdir;
+}
+
+sub rewrite_files {
+    chdir $srcdir;
+    my @files = glob("*.[ch]");
+    chdir $topdir;
+    for my $file (@files) {
+	transform_file($file);
+    }
+}
+
+sub transform_file {
+    my $file = shift;
+    my $header = 0;
+    if (substr($file,-2) eq ".h") {
+	$header = 1;
+    }
+    open my $ih, '<', "$srcdir/$file";
+    open my $oh, '>', "$tgtdir/$file";
+    while (<$ih>) {
+	if (not $header and not /^extern\s/) {
+	    # Only fix up externs in C source
+	    print $oh $_;
+	    next;
+	}
+	unless (/^extern\s/ or /^void\s/ or /^zchar\s/ or /^zbyte\s/ or
+		/^int\s/ or /^bool\s/) {
+	    # In headers, we need to fix up declarations too.
+	    # Our typedefs, enums, and structs happen to have short
+	    #  names, so don't bother.
+	    print $oh $_;
+	    next;
+	}
+	chomp;
+	my $symbol;
+	if (/^extern/) {
+	    # The symbol is the last word on the line before return type
+	    my $tmpline = substr($_,0,-1); # drop the semicolon
+	    # Strip everything after a paren
+	    $tmpline =~ s/\(.*//;
+	    $symbol = (split ' ', $tmpline)[-1];
+	} else {
+	    # Otherwise it's the second
+	    $symbol = (split ' ', $_)[1];
+	}
+	# Get rid of dereference, pointer, index, and parameter notation.
+	$symbol =~ s/^\*//;
+	$symbol =~ s/^\&//;	
+	$symbol =~ s/\[.*//;
+	$symbol =~ s/\(.*//;	
+
+	# Only fix up symbols that are long enough to matter
+	if (length($symbol) < 6) {
+	    print $oh "$_\n";
+	    next;
+	}
+	my $sedstr;
+	# We want to sort substitutions by length in order to not do
+	#  incorrect substring replacement.
+	# We assume all identifiers are < 100 characters.  This is not Java.
+	my $lkey=sprintf("%02d",length($symbol)) . $symbol;
+	my $newid;
+	if (not $symbolmap{$lkey}) {
+	    $newid = "A" . sprintf("%05d",$counter);
+	    $symbolmap{$lkey} = ();
+	    $symbolmap{$lkey}{'original'} = $symbol;
+	    $symbolmap{$lkey}{'new'} = $newid;
+	    $counter++;
+	} else {
+	    $newid = $symbolmap{$lkey}{'new'};
+	}
+	$_ =~ s/$symbol/$newid/;
+	print $oh "$_\n";
+    }
+    close $ih;
+    close $oh;
+}
+
+sub create_sed_file {
+    open my $ofh, ">", $sedfile;
+    for my $k (reverse(sort(keys %symbolmap))) {
+	my $symbol = $symbolmap{$k}{'original'};
+	my $newsym = $symbolmap{$k}{'new'};
+	print $ofh "s/$symbol/$newsym/g\n";
+    }
+}
+	    
+sub fix_specific_files {
+    # getline() is already in -lc in BSD, with 3 args, not 1
+    `sed $sedinplace -e s/getline/frotz_getline/g $tgtdir/dumb-input.c`;
+    # A label at the end of a block makes more modern compilers angry.
+    #  This happens to be line 263 of fastmem.c.  Add a no-op.
+    `sed $sedinplace '263i\\\n(void)0;' $tgtdir/fastmem.c`;
+
+    shorten_filenames();
+   
+}
+
+sub shorten_filenames {
+    chdir $tgtdir;
+    # shorten 'dumb-' first
+    my @files=glob("dumb-*");
+    for my $f (@files) {
+	(my $new = $f) =~ s/dumb-/d/;
+	rename $f,$new;
+    }
+    # Fix up includes
+    `sed $sedinplace s/dumb-frotz.h/dfrotz.h/ *.c`;
+    # Now make them a maximum of six characters before the .c
+    my %collision=();
+    @files=glob("*.c"); # We already know the .h files are OK.
+    for my $f (@files) {
+	my $asc=48; # Start with "0"
+	if (length($f) > 7) { # counting the .c
+	    my $tnam = substr($f,0,6);
+	    while ($collision{$tnam}) {
+		substr($tnam,5) = chr($asc);
+		$asc += 1;
+		if ($asc == 58) {
+		    $asc=65; # Skip punctuation
+		}
+		# We really really should not run out of numbers and capital
+		#  letters.
+	    }
+	    $collision{$tnam} = 1;
+	    my $new = $tnam . ".c";
+	    rename $f, $new;
+	}
+    }
+}
+
+sub run_sed {
+    chdir $tgtdir;
+    `sed $sedinplace -f $sedfile *.c`;
+    chdir $topdir;
+}
+
+the_whole_enchilada();
+
+exit 0;
