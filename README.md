@@ -11,25 +11,25 @@ I know why:
 #include <stdio.h>
 int main ( int argc, char **argv) {
     char c=-1;
-    printf("C is %d\n", (unsigned char) c);
+    short s=-1;
+    printf("Max unsigned char is %d\n", (unsigned char) c);
+    printf("Max unsigned short is %d\n", (unsigned short) s);
 }
 @cc -o testc testc.c
-KCC:    TESTC
- "testc.c", line 5: [Warning] File does not end with EOL (\n)
-       (main+3, p.1 l.5):  c=-1;     printf("C is %d\n", (unsigned char) c); }
+KCC:   TESTC
+ "testc.c", line 8: [Note] Parameter "argc" not used
+       (main+6, p.1 l.7): "Max unsigned short is %d\n", (unsigned short) s); }
 
- "testc.c", line 5: [Note] Parameter "argc" not used
-       (main+3, p.1 l.5):  c=-1;     printf("C is %d\n", (unsigned char) c); }
+ "testc.c", line 8: [Note] Parameter "argv" not used
+       (main+6, p.1 l.7): "Max unsigned short is %d\n", (unsigned short) s); }
 
- "testc.c", line 5: [Note] Parameter "argv" not used
-       (main+3, p.1 l.5):  c=-1;     printf("C is %d\n", (unsigned char) c); }
-
-<ADAM>TESTC.PRE.1
-<ADAM>TESTC.FAI.1
+<ADAM>TESTC.PRE.4
+<ADAM>TESTC.FAI.4
 FAIL:  TESTC
-LINK:    Loading
+LINK:  Loading
 @testc
-C is 511
+Max unsigned char is 511
+Max unsigned short is 262143
 ```
 
 And this line in the Dumb-Frotz README, in the CAVEATS:
