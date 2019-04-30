@@ -4,6 +4,42 @@
 
 It's not playing games yet, although the executable starts up.
 
+I know why:
+
+```
+@type testc.c
+#include <stdio.h>
+int main ( int argc, char **argv) {
+    char c=-1;
+    printf("C is %d\n", (unsigned char) c);
+}
+@cc -o testc testc.c
+KCC:    TESTC
+ "testc.c", line 5: [Warning] File does not end with EOL (\n)
+       (main+3, p.1 l.5):  c=-1;     printf("C is %d\n", (unsigned char) c); }
+
+ "testc.c", line 5: [Note] Parameter "argc" not used
+       (main+3, p.1 l.5):  c=-1;     printf("C is %d\n", (unsigned char) c); }
+
+ "testc.c", line 5: [Note] Parameter "argv" not used
+       (main+3, p.1 l.5):  c=-1;     printf("C is %d\n", (unsigned char) c); }
+
+<ADAM>TESTC.PRE.1
+<ADAM>TESTC.FAI.1
+FAIL:  TESTC
+LINK:    Loading
+@testc
+C is 511
+```
+
+And this line in the Dumb-Frotz README, in the CAVEATS:
+
+```
+     - lack of 8-bit char and 16-bit short.  I didn't bother to think
+       much about this.  If you're using a 36-bit Honeywell or
+       something, let me know.
+```
+
 ## Introduction
 
 ### What?
