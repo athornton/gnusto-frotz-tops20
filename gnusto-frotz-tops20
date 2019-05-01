@@ -23,8 +23,11 @@ use warnings;
 use Cwd;
 use File::Path qw(rmtree);
 
-our $FROTZREPO="https://gitlab.com/DavidGriffith/frotz.git";
-our $FROTZTAG="dumb-2.32r1";
+#our $FROTZREPO="https://gitlab.com/DavidGriffith/frotz.git";
+#our $FROTZTAG="dumb-2.32r1";
+
+our $FROTZREPO="https://github.com/athornton/tops20-frotz.git";
+our $FROTZTAG="unix";
 
 our %symbolmap = ();
 our $counter = 0;
@@ -45,7 +48,8 @@ sub the_whole_enchilada {
     prepare_output_directory();
     rewrite_files();
     create_sed_file();
-    fix_specific_files();
+    # fix_specific_files();
+    shorten_filenames();
     run_sed();
 }
 
@@ -56,6 +60,7 @@ sub fetch_sources {
     }
     chdir $srcdir;
     `git checkout $FROTZTAG`;
+    `git pull`;
     chdir $topdir;
 }
 
@@ -158,8 +163,6 @@ sub fix_specific_files {
     #  This happens to be line 263 of fastmem.c.  Add a no-op.
     `sed $sedinplace '263i\\\n(void)0;' $tgtdir/fastmem.c`;
 
-    shorten_filenames();
-   
 }
 
 sub shorten_filenames {
