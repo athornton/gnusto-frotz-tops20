@@ -2,9 +2,10 @@
 
 ## Status
 
-It's not playing games yet, although the executable starts up, and you
-can kind of wander around the geography.  The output's kind of garbled,
-and the parser is messed up.
+It almost plays Zork 1.  You can wander around the forest, take stuff,
+move the leaves, enter the house, turn the lamp on and off...but after a
+little while verbs get confused.  "Take" thinks it's "climb," things
+like that.
 
 I know why, in a general sense:
 
