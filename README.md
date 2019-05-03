@@ -66,6 +66,12 @@ So you need to map all the symbols in the header files, everything declared
 "extern" in the source files, and also make sure that your input file names
 are unambiguous and no more than six characters before the extension.
 
+But even that's not enough, because there are a number of places where
+Frotz is assuming 8-bit chars and 16-bit shorts.  So now
+`gnusto-frotz-tops20` pulls from my fork of the sources at
+https://github.com/athornton/tops20-frotz, where I've been hacking to
+try to sanitize the code such that TOPS-20 is happy with it.
+
 ### Why?
 
 To bring Zork back home.
