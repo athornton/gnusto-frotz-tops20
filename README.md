@@ -2,9 +2,11 @@
 
 ## Status
 
-It's not playing games yet, although the executable starts up.
+It's not playing games yet, although the executable starts up, and you
+can kind of wander around the geography.  The output's kind of garbled,
+and the parser is messed up.
 
-I know why:
+I know why, in a general sense:
 
 ```
 @type testc.c
