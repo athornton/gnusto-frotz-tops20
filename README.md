@@ -100,8 +100,9 @@ bunch of files in the `output` directory.
 
 ### Compiling that source
 
-Copy those files to a TOPS-20 system and compile them with `cc -o frotz
-*.c`.  That will generate `frotz.exe`, which is the TOPS-20 executable.
+Copy those files to a TOPS-20 system (e.g. FTP in text mode) and compile
+them with `cc -o frotz *.c`.  That will generate `frotz.exe`, which is
+the TOPS-20 executable.
 
 I'm using
 [the late Mark Crispin's "Panda" distribution of TOPS-20](http://panda.trailing-edge.com/)
