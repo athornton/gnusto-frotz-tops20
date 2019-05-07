@@ -2,10 +2,10 @@
 
 ## Status
 
-It almost plays Zork 1.  You can wander around the forest, take stuff,
-move the leaves, enter the house, turn the lamp on and off...but after a
-little while verbs get confused.  "Take" thinks it's "climb," things
-like that.
+It seems to play Zork 1.  Large z3 games, and other z-code games, run
+out of memory.
+
+It passes the tests in `czech` but not all the ones in `praxix`.
 
 I know why, in a general sense:
 
@@ -102,8 +102,6 @@ bunch of files in the `output` directory.
 
 Copy those files to a TOPS-20 system and compile them with `cc -o frotz
 *.c`.  That will generate `frotz.exe`, which is the TOPS-20 executable.
-It's also uploaded [here](frotz.exe), although this version doesn't yet
-work.
 
 I'm using
 [the late Mark Crispin's "Panda" distribution of TOPS-20](http://panda.trailing-edge.com/)
@@ -111,11 +109,9 @@ and the [klh10](https://github.com/DavidGriffith/klh10) interpreter.
 
 ### Running a game
 
-Well, the bad news is, it's not working yet.  The `frotz` executable
-starts all right, and it will print its help message if invoked with no
-arguments.  But if you try to point it at a game, the output is garbled,
-the parser is confused about what verbs take how many nouns, and you
-don't get very far before it falls over in a confused heap.
-Additionally, the amount of debugging output swamps the game text.
-
+`frotz <directory>game` seems to work OK for Zork 1.  It's running out
+of memory on other games but that may be my emulator configuration.  A
+couple of array load/store instructions aren't working right yet, and
+the memory stream stuff doesn't work, but that doesn't matter for the
+classic games.
 
