@@ -189,8 +189,16 @@ sub shorten_filenames {
 	(my $new = $f) =~ s/dumb-/d/;
 	rename $f,$new;
     }
+    # do it again for 'dumb_'
+    @files=glob("dumb_*");
+    for my $f (@files) {
+	(my $new = $f) =~ s/dumb_/d/;
+	rename $f,$new;
+    }
     # Fix up includes
     `sed $sedinplace s/dumb-frotz.h/dfrotz.h/ *.c`;
+    `sed $sedinplace s/dumb_frotz.h/dfrotz.h/ *.c`;
+    `sed $sedinplace s/dumb_blorb.h/dblorb.h/ *.c`;
     # Now make them a maximum of six characters before the .c
     my %collision=();
     @files=glob("*.c"); # We already know the .h files are OK.
