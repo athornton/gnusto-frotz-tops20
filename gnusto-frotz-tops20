@@ -30,6 +30,10 @@ our $FROTZTAG="master";
 our $FROTZCOMMON="src/common";
 our $FROTZDUMB="src/dumb";
 
+our $USEMODIFIED = 1;
+our $MODREPO="https://github.com/athornton/tops20-frotz.git";
+our $MODBRANCH="unix";
+
 our %symbolmap = ();
 our $counter = 0;
 our $topdir = getcwd;
@@ -45,7 +49,11 @@ if ( `uname` eq "Darwin\n" ) {
 our %contents = ();
 
 sub the_whole_enchilada {
-    fetch_sources();
+    if ($USEMODIFIED) {
+	fetch_modified_sources();
+    } else {
+	fetch_sources();
+    }
     prepare_output_directory();
     rewrite_files();
     create_sed_file();
@@ -77,6 +85,15 @@ sub fetch_sources {
     }
 
     rmtree("$srcdir/src");
+    chdir $topdir;
+}
+
+sub fetch_modified_sources {
+    chdir $topdir;
+    $srcdir = "frotz-modified";
+    if ( ! -d $srcdir ) {
+	`git clone -b $MODBRANCH $MODREPO $srcdir`;
+    }
     chdir $topdir;
 }
 
@@ -199,6 +216,7 @@ sub shorten_filenames {
     `sed $sedinplace s/dumb-frotz.h/dfrotz.h/ *.c`;
     `sed $sedinplace s/dumb_frotz.h/dfrotz.h/ *.c`;
     `sed $sedinplace s/dumb_blorb.h/dblorb.h/ *.c`;
+
     # Now make them a maximum of six characters before the .c
     my %collision=();
     @files=glob("*.c"); # We already know the .h files are OK.
