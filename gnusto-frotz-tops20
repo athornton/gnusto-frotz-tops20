@@ -22,12 +22,13 @@ use warnings;
 
 use Cwd;
 use File::Path qw(rmtree);
+use File::Copy;
 
-#our $FROTZREPO="https://gitlab.com/DavidGriffith/frotz.git";
+our $FROTZREPO="https://gitlab.com/DavidGriffith/frotz.git";
 #our $FROTZTAG="dumb-2.32r1";
-
-our $FROTZREPO="https://github.com/athornton/tops20-frotz.git";
-our $FROTZTAG="unix";
+our $FROTZTAG="master";
+our $FROTZCOMMON="src/common";
+our $FROTZDUMB="src/dumb";
 
 our %symbolmap = ();
 our $counter = 0;
@@ -56,11 +57,26 @@ sub the_whole_enchilada {
 sub fetch_sources {
     chdir $topdir;
     if ( ! -d $srcdir ) {
-	`git clone $FROTZREPO $srcdir`;
+	`git clone --depth 1 --no-checkout --filter=blob:none $FROTZREPO $srcdir`;
     }
     chdir $srcdir;
-    `git checkout $FROTZTAG`;
+    `git checkout $FROTZTAG -- $FROTZCOMMON`;
+    `git checkout $FROTZTAG -- $FROTZDUMB`;
     `git pull`;
+
+    my @subdirs = glob "$srcdir/src/*";
+    my @files;
+
+    foreach my $dir (@subdirs) {
+	push(@files, glob "$dir/*.c");
+	push(@files, glob "$dir/*.h");
+    }
+
+    foreach my $file (@files) {
+	move($file, $srcdir);
+    }
+
+    rmtree("$srcdir/src");
     chdir $topdir;
 }
 
