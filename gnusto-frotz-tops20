@@ -25,19 +25,19 @@ use File::Path qw(rmtree);
 use File::Copy;
 
 our $FROTZREPO="https://gitlab.com/DavidGriffith/frotz.git";
-#our $FROTZTAG="dumb-2.32r1";
-our $FROTZTAG="master";
+our $FROTZBRANCH="master";
 our $FROTZCOMMON="src/common";
 our $FROTZDUMB="src/dumb";
 
-our $USEMODIFIED = 1;
+our $USEMODIFIED = 0;
 our $MODREPO="https://github.com/athornton/tops20-frotz.git";
-our $MODBRANCH="unix";
+our $MODBRANCH="current-unix";
 
 our %symbolmap = ();
 our $counter = 0;
-our $topdir = getcwd;
-our $srcdir = "$topdir/frotz-orig";
+our $topdir = getcwd();
+our $checkoutdir = "$topdir/frotz-orig";
+our $srcdir = "$topdir/ansifrotz";
 our $tgtdir = "$topdir/output";
 our $sedfile = "$tgtdir/urbzig.sed";
 our $sedinplace = "-i";
@@ -50,66 +50,138 @@ our %contents = ();
 
 sub the_whole_enchilada {
     if ($USEMODIFIED) {
-	fetch_modified_sources();
+        fetch_modified_sources();
     } else {
-	fetch_sources();
+        fetch_upstream_sources();
     }
     prepare_output_directory();
+    create_build_time_files();
     rewrite_files();
     create_sed_file();
-    # fix_specific_files();
     shorten_filenames();
     run_sed();
+    postprocess_files();
 }
 
-sub fetch_sources {
+sub fetch_upstream_sources {
     chdir $topdir;
+    if ( ! -d $checkoutdir) {
+        `git clone -b $FROTZBRANCH $FROTZREPO $checkoutdir`;
+    }
+    chdir $checkoutdir;
+    `git pull`;
     if ( ! -d $srcdir ) {
-	`git clone --depth 1 --no-checkout --filter=blob:none $FROTZREPO $srcdir`;
+        mkdir $srcdir;
+    }
+    my @subdirs = ("src/common", "src/dumb");
+    my @files = ("src/Makefile");
+    for my $dir(@subdirs) {
+        push(@files, glob "$dir/*.c");
+        push(@files, glob "$dir/*.h");
+    }
+    for my $file (@files) {
+        copy($file, $srcdir);
     }
     chdir $srcdir;
-    `git checkout $FROTZTAG -- $FROTZCOMMON`;
-    `git checkout $FROTZTAG -- $FROTZDUMB`;
-    `git pull`;
-
-    my @subdirs = glob "$srcdir/src/*";
-    my @files;
-
-    foreach my $dir (@subdirs) {
-	push(@files, glob "$dir/*.c");
-	push(@files, glob "$dir/*.h");
+    if (! -d ".git") {
+        `git init`;
+        `git add .`;
+        `git commit -m "Initial commit of upstream files"`;
     }
-
-    foreach my $file (@files) {
-	move($file, $srcdir);
-    }
-
-    rmtree("$srcdir/src");
     chdir $topdir;
 }
 
 sub fetch_modified_sources {
     chdir $topdir;
-    $srcdir = "frotz-modified";
+    $srcdir = "$topdir/frotz-modified";
     if ( ! -d $srcdir ) {
-	`git clone -b $MODBRANCH $MODREPO $srcdir`;
+        `git clone -b $MODBRANCH $MODREPO $srcdir`;
     }
+    chdir $srcdir;
+    `git pull`;
     chdir $topdir;
 }
 
 sub prepare_output_directory {
     if (-d $tgtdir) {
-	rmtree $tgtdir;
+        rmtree $tgtdir;
     }
     mkdir $tgtdir;
 }
 
+sub create_build_time_files {
+    chdir $srcdir;
+    my $date=`git show -s --format=%ci`;
+    my $branch = `git rev-parse --abbrev-ref HEAD`;
+    my $hash = `git rev-parse HEAD`;
+    my $shorthash = `git rev-parse --short HEAD`;
+    chomp $date;
+    chomp $branch;
+    chomp $hash;
+    chomp $shorthash;
+    my $version;
+    if ( -f "$srcdir/Makefile" ) {
+        open my $mh, '<', "$srcdir/Makefile";
+        while (<$mh>) {
+            if (m/VERSION = (\S+)/) {
+                $version = $1;
+                last;
+            }
+        }
+        close $mh;
+    }
+    if (! $version) {
+        $version = `date "+%Y%m%d%H%M%S%Z"`;
+        chomp ($version)
+    }
+    # Overwrite the source dir so we benefit from the transforms.
+    open my $oh, '>', "$srcdir/git_hash.h" or die("Couldn't open $srcdir: $!\n");
+    print $oh "#define VERSION \"$version\"\n";
+    print $oh "#define GIT_HASH \"$hash\"\n";
+    print $oh "#define GIT_HASH_SHORT \"$shorthash\"\n";
+    print $oh "#define GIT_BRANCH \"$branch\"\n";
+    print $oh "#define GIT_DATE \"$date\"\n";
+    close $oh;
+    open $oh, '>', "$srcdir/defs.h";
+    print $oh "#ifndef COMMON_DEFINES_H\n";
+    print $oh "#define COMMON_DEFINES_H\n";
+    print $oh "#define NO_BLORB yes\n";
+    print $oh "#endif /* COMMON_DEFINES_H */\n";
+    close $oh;
+    open $oh, '>', "$srcdir/version.c";
+    print $oh "#include \"frotz.h\"\n";
+    $date = `date "+%Y-%m-%d %H:%M:%S %z"`;
+    chomp $date;
+    print $oh "const char build_timestamp[] = \"$date\";\n";
+    close $oh;
+}
+
 sub rewrite_files {
     chdir $srcdir;
+    add_sanitize_16();
     my @files = glob("*.[ch]");
+    fix_types();
     chdir $topdir;
     for my $file (@files) {
-	transform_file($file);
+        transform_file($file);
+    }
+    revert_sources();
+}
+
+sub fix_types {
+    # f_setup_t and f_setup are both defined and that confuses us, so...
+    `sed $sedinplace s/f_setup_t/fs_t/g *.h *.c`;
+    # interpreter_number is inside a struct but also a variable, so...
+    `sed $sedinplace s/interpreter_number/terp_num/g *.h *.c`;
+}
+
+sub revert_sources() {
+    # We might have committed defs.h/git_hash.h/version.c
+    #  We rewrite them every time, but we don't want to commit from this
+    #   copy most likely.
+    chdir $srcdir;
+    if ( -d ".git") {
+        `git reset --hard`;
     }
 }
 
@@ -117,85 +189,104 @@ sub transform_file {
     my $file = shift;
     my $header = 0;
     if (substr($file,-2) eq ".h") {
-	$header = 1;
+        $header = 1;
     }
     open my $ih, '<', "$srcdir/$file";
     open my $oh, '>', "$tgtdir/$file";
     while (<$ih>) {
-	if (not $header and not /^extern\s/) {
-	    # Only fix up externs in C source
-	    print $oh $_;
-	    next;
-	}
-	unless (/^extern\s/ or /^void\s/ or /^zchar\s/ or /^zbyte\s/ or
-		/^int\s/ or /^bool\s/) {
-	    # In headers, we need to fix up declarations too.
-	    # Our typedefs, enums, and structs happen to have short
-	    #  names, so don't bother.
-	    print $oh $_;
-	    next;
-	}
-	chomp;
-	my $symbol;
-	if (/^extern/) {
-	    # The symbol is the last word on the line before return type
-	    my $tmpline = substr($_,0,-1); # drop the semicolon
-	    # Strip everything after a paren
-	    $tmpline =~ s/\(.*//;
-	    $symbol = (split ' ', $tmpline)[-1];
-	} else {
-	    # Otherwise it's the second
-	    $symbol = (split ' ', $_)[1];
-	}
-	# Get rid of dereference, pointer, index, and parameter notation.
-	$symbol =~ s/^\*//;
-	$symbol =~ s/^\&//;	
-	$symbol =~ s/\[.*//;
-	$symbol =~ s/\(.*//;	
+        # Replace all casts to short with sanitize_16()
+        if ($file ne "sanitize_16.c") {
+            # Except, of course, for *this* cast to short.
+            s/([ \(])\(short\) ([^\s;]+)/$1sanitize_16( $2 )/g ;
+        }
+        if (not $header and not /^extern\s/) {
+            # Only fix up externs in C source
+            print $oh $_;
+            next;
+        }
+        unless (/^extern\s/ or /^void\s/ or /^zchar\s/ or /^zbyte\s/ or
+                /^int\s/ or /^bool\s/) {
+            # In headers, we need to fix up declarations too.
+            # Our typedefs, enums, and structs happen to have short
+            #  names, so don't bother.
+            print $oh $_;
+            next;
+        }
+        chomp;
+        my $symbol;
+        if (/^extern/) {
+            # The symbol is the last word on the line before return type
+            my $tmpline = substr($_,0,-1); # drop the semicolon
+            # Strip everything after a paren
+            $tmpline =~ s/\(.*//;
+            $symbol = (split ' ', $tmpline)[-1];
+        } else {
+            # Otherwise it's the second
+            $symbol = (split ' ', $_)[1];
+            # The semicolon isn't part of it.
+            if (substr($symbol,-1,1) eq ';') {
+                $symbol = substr($symbol,0,-1);
+            }
+        }
+        # Get rid of dereference, pointer, index, and parameter notation.
+        $symbol =~ s/^\*//;
+        $symbol =~ s/^\&//;
+        $symbol =~ s/\[.*//;
+        $symbol =~ s/\(.*//;
 
-	# Only fix up symbols that are long enough to matter
-	if (length($symbol) < 6) {
-	    print $oh "$_\n";
-	    next;
-	}
-	my $sedstr;
-	# We want to sort substitutions by length in order to not do
-	#  incorrect substring replacement.
-	# We assume all identifiers are < 100 characters.  This is not Java.
-	my $lkey=sprintf("%02d",length($symbol)) . $symbol;
-	my $newid;
-	if (not $symbolmap{$lkey}) {
-	    $newid = "A" . sprintf("%05d",$counter);
-	    $symbolmap{$lkey} = ();
-	    $symbolmap{$lkey}{'original'} = $symbol;
-	    $symbolmap{$lkey}{'new'} = $newid;
-	    $counter++;
-	} else {
-	    $newid = $symbolmap{$lkey}{'new'};
-	}
-	$_ =~ s/$symbol/$newid/;
-	print $oh "$_\n";
+        # Only fix up symbols that are long enough to matter
+        if (length($symbol) < 6) {
+            print $oh "$_\n";
+            next;
+        }
+        my $sedstr;
+        # We want to sort substitutions by length in order to not do
+        #  incorrect substring replacement.
+        # We assume all identifiers are < 100 characters.  This is not Java.
+        my $lkey=sprintf("%02d",length($symbol)) . $symbol;
+        my $newid;
+        if (not $symbolmap{$lkey}) {
+            $newid = "A" . sprintf("%05d",$counter);
+            $symbolmap{$lkey} = ();
+            $symbolmap{$lkey}{'original'} = $symbol;
+            $symbolmap{$lkey}{'new'} = $newid;
+            $counter++;
+        } else {
+            $newid = $symbolmap{$lkey}{'new'};
+        }
+        $_ =~ s/$symbol/$newid/;
+        print $oh "$_\n";
     }
     close $ih;
     close $oh;
 }
 
+sub add_sanitize_16 {
+    open my $ofh, '>', "$tgtdir/sanitize_16.c";
+    print $ofh <<'EOT';
+#include "frotz.h"
+
+short sanitize_16( zword z) {
+    short s;
+
+    s = (short) (z & 0xffff) ;
+    if ( ( s > 0 )  && ( s > 32767 ) ) {
+        s = - ( 65536 - s );
+    }
+
+    return s;
+}
+EOT
+    close $ofh;
+}
+
 sub create_sed_file {
     open my $ofh, ">", $sedfile;
     for my $k (reverse(sort(keys %symbolmap))) {
-	my $symbol = $symbolmap{$k}{'original'};
-	my $newsym = $symbolmap{$k}{'new'};
-	print $ofh "s/$symbol/$newsym/g\n";
+        my $symbol = $symbolmap{$k}{'original'};
+        my $newsym = $symbolmap{$k}{'new'};
+        print $ofh "s/$symbol/$newsym/g\n";
     }
-}
-	    
-sub fix_specific_files {
-    # getline() is already in -lc in BSD, with 3 args, not 1
-    `sed $sedinplace -e s/getline/frotz_getline/g $tgtdir/dumb-input.c`;
-    # A label at the end of a block makes more modern compilers angry.
-    #  This happens to be line 263 of fastmem.c.  Add a no-op.
-    `sed $sedinplace '263i\\\n(void)0;' $tgtdir/fastmem.c`;
-
 }
 
 sub shorten_filenames {
@@ -203,40 +294,47 @@ sub shorten_filenames {
     # shorten 'dumb-' first
     my @files=glob("dumb-*");
     for my $f (@files) {
-	(my $new = $f) =~ s/dumb-/d/;
-	rename $f,$new;
+        (my $new = $f) =~ s/dumb-/d/;
+        rename $f,$new;
     }
     # do it again for 'dumb_'
     @files=glob("dumb_*");
     for my $f (@files) {
-	(my $new = $f) =~ s/dumb_/d/;
-	rename $f,$new;
+        (my $new = $f) =~ s/dumb_/d/;
+        rename $f,$new;
     }
+    rename("missing.h","missin.h");
+    rename("git_hash.h","githas.h");
     # Fix up includes
+    `sed $sedinplace 'sX\.\./common/frotz.hXfrotz.hX' dfrotz.h`;
     `sed $sedinplace s/dumb-frotz.h/dfrotz.h/ *.c`;
     `sed $sedinplace s/dumb_frotz.h/dfrotz.h/ *.c`;
     `sed $sedinplace s/dumb_blorb.h/dblorb.h/ *.c`;
-
+    `sed $sedinplace s/git_hash.h/githas.h/ *.c`;
+    `sed $sedinplace s/git_hash.h/githas.h/ *.c`;
+    `sed $sedinplace s/missing.h/missin.h/ frotz.h`;
+    `sed $sedinplace s/git_hash.h/githas.h/ frotz.h`;
+    `sed $sedinplace s/git_hash.h/githas.h/ frotz.h`;
     # Now make them a maximum of six characters before the .c
     my %collision=();
     @files=glob("*.c"); # We already know the .h files are OK.
     for my $f (@files) {
-	my $asc=48; # Start with "0"
-	if (length($f) > 7) { # counting the .c
-	    my $tnam = substr($f,0,6);
-	    while ($collision{$tnam}) {
-		substr($tnam,5) = chr($asc);
-		$asc += 1;
-		if ($asc == 58) {
-		    $asc=65; # Skip punctuation
-		}
-		# We really really should not run out of numbers and capital
-		#  letters.
-	    }
-	    $collision{$tnam} = 1;
-	    my $new = $tnam . ".c";
-	    rename $f, $new;
-	}
+        my $asc=48; # Start with "0"
+        if (length($f) > 7) { # counting the .c
+            my $tnam = substr($f,0,6);
+            while ($collision{$tnam}) {
+                substr($tnam,5) = chr($asc);
+                $asc += 1;
+                if ($asc == 58) {
+                    $asc=65; # Skip punctuation
+                }
+                # We really really should not run out of numbers and capital
+                #  letters.
+            }
+            $collision{$tnam} = 1;
+            my $new = $tnam . ".c";
+            rename $f, $new;
+        }
     }
 }
 
@@ -244,6 +342,13 @@ sub run_sed {
     chdir $tgtdir;
     `sed $sedinplace -f $sedfile *.c`;
     chdir $topdir;
+}
+
+sub postprocess_files {
+    chdir $tgtdir;
+    # "interpret" is one of our transformed symbols.
+    `sed $sedinplace -e 's/An A.*er for/an interpreter for/' main.c`;
+    `sed $sedinplace -e 's/(A.*er)\.A.*er_number/\1.interpreter_number/' dinit.c`;
 }
 
 the_whole_enchilada();
