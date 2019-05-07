@@ -2,12 +2,13 @@
 
 ## Status
 
-It seems to play Zork 1.  Large z3 games, and other z-code games, run
-out of memory.
+It seems to play the Infocom games and a smattering of community-written
+Z-code games.
 
-It passes the tests in `czech` but not all the ones in `praxix`.
+It passes the tests in `czech` but not all the ones in `praxix`;
+behavior on the test suite seems to match dumb-frotz 2.32 for Unix.
 
-I know why, in a general sense:
+## The Reason It Wasn't Trivial
 
 ```
 @type testc.c
@@ -50,9 +51,9 @@ And this line in the Dumb-Frotz README, in the CAVEATS:
 This program has only one function: create a version of dumb-frotz that
 is playable on TOPS-20 on a PDP-10.
 
-It does this by acquiring dumb-frotz 2.32r1, transmogrifying it so that
-the TOPS-20 linker can handle the symbols, and outputting the mogrified
-sources.
+It does this by acquiring a fork of dumb-frotz 2.32r1, transmogrifying
+it so that the TOPS-20 linker can handle the symbols, and outputting the
+mogrified sources.
 
 This isn't as easy as it sounds, because:
 
@@ -71,7 +72,8 @@ But even that's not enough, because there are a number of places where
 Frotz is assuming 8-bit chars and 16-bit shorts.  So now
 `gnusto-frotz-tops20` pulls from my fork of the sources at
 https://github.com/athornton/tops20-frotz, where I've been hacking to
-try to sanitize the code such that TOPS-20 is happy with it.
+sanitize the code such that TOPS-20 is happy with it.  I think I have
+finally succeeded.
 
 ### Why?
 
@@ -100,9 +102,9 @@ bunch of files in the `output` directory.
 
 ### Compiling that source
 
-Copy those files to a TOPS-20 system (e.g. FTP in text mode) and compile
-them with `cc -o frotz *.c`.  That will generate `frotz.exe`, which is
-the TOPS-20 executable.
+Copy those files to a TOPS-20 system (e.g. FTP in text mode) that has
+KCC installed, and compile them with `cc -o frotz *.c`.  That will
+generate `frotz.exe`, which is the TOPS-20 executable.
 
 I'm using
 [the late Mark Crispin's "Panda" distribution of TOPS-20](http://panda.trailing-edge.com/)
@@ -110,9 +112,13 @@ and the [klh10](https://github.com/DavidGriffith/klh10) interpreter.
 
 ### Running a game
 
-`frotz <directory>game` seems to work OK for Zork 1.  It's running out
-of memory on other games but that may be my emulator configuration.  A
-couple of array load/store instructions aren't working right yet, and
-the memory stream stuff doesn't work, but that doesn't matter for the
-classic games.
+From the directory containing `frotz`, `frotz <directory>game` does the
+trick.
+
+### Future steps
+
+I presume there's an OK curses library for KCC, although I haven't
+looked.  The PDP-10 certainly should be able to talk to a VT-100 or one
+of its successors, so we should be able to do a pretty decent
+representation of all the non-graphical games.
 
