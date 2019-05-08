@@ -207,7 +207,7 @@ sub transform_file {
             next;
         }
         unless (/^extern\s/ or /^void\s/ or /^zchar\s/ or /^zbyte\s/ or
-                /^int\s/ or /^bool\s/ or /^short\s/) {
+                /^int\s/ or /^bool\s/ or /^short\s/ or /^char\s/) {
             # In headers, we need to fix up declarations too.
             # Our typedefs, enums, and structs happen to have short
             #  names, so don't bother.
@@ -342,7 +342,7 @@ sub shorten_filenames {
 
 sub run_sed {
     chdir $tgtdir;
-    `sed $sedinplace -f $sedfile *.c`;
+    `sed $sedinplace -f $sedfile *.c missin.h`;
     chdir $topdir;
 }
 
