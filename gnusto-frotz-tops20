@@ -29,7 +29,7 @@ our $FROTZBRANCH="master";
 our $FROTZCOMMON="src/common";
 our $FROTZDUMB="src/dumb";
 
-our $USEMODIFIED = 0;
+our $USEMODIFIED = 1;
 our $MODREPO="https://github.com/athornton/tops20-frotz.git";
 our $MODBRANCH="current-unix";
 
@@ -146,6 +146,8 @@ sub create_build_time_files {
     print $oh "#ifndef COMMON_DEFINES_H\n";
     print $oh "#define COMMON_DEFINES_H\n";
     print $oh "#define NO_BLORB yes\n";
+    print $oh "#define NO_STRDUP yes\n";
+    print $oh "#define NO_LIBGEN_H yes\n";
     print $oh "#endif /* COMMON_DEFINES_H */\n";
     close $oh;
     open $oh, '>', "$srcdir/version.c";
@@ -205,7 +207,7 @@ sub transform_file {
             next;
         }
         unless (/^extern\s/ or /^void\s/ or /^zchar\s/ or /^zbyte\s/ or
-                /^int\s/ or /^bool\s/) {
+                /^int\s/ or /^bool\s/ or /^short\s/) {
             # In headers, we need to fix up declarations too.
             # Our typedefs, enums, and structs happen to have short
             #  names, so don't bother.
