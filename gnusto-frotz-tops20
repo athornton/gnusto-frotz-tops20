@@ -175,6 +175,10 @@ sub fix_types {
     `sed $sedinplace s/f_setup_t/fs_t/g *.h *.c`;
     # interpreter_number is inside a struct but also a variable, so...
     `sed $sedinplace s/interpreter_number/terp_num/g *.h *.c`;
+    # Apparently internal symbols in the same file have to be unique
+    #  within 8 characters, so...
+    `sed $sedinplace s/get_window_font/get_wf/g *.h *.c`;
+    `sed $sedinplace s/option_sound/opt_snd/g *.h *.c`;
 }
 
 sub revert_sources() {
