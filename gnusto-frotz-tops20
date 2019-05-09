@@ -211,7 +211,8 @@ sub transform_file {
             next;
         }
         unless (/^extern\s/ or /^void\s/ or /^zchar\s/ or /^zbyte\s/ or
-                /^int\s/ or /^bool\s/ or /^short\s/ or /^char\s/) {
+                /^int\s/ or /^bool\s/ or /^short\s/ or /^char\s/ or
+	        /^zword/) {
             # In headers, we need to fix up declarations too.
             # Our typedefs, enums, and structs happen to have short
             #  names, so don't bother.

@@ -2,11 +2,12 @@
 
 ## Status
 
-It seems to play the Infocom games and a smattering of community-written
-Z-code games.
+Frotz is now based on 2.45pre (https://gitlab.com/DavidGriffith/frotz/,
+master branch).  It seems to play the Infocom games and a smattering of
+community-written Z-code games.  So far only the "dumb-frotz" TTY
+interface is supported.
 
-It passes the tests in `czech` but not all the ones in `praxix`;
-behavior on the test suite seems to match dumb-frotz 2.32 for Unix.
+Its behavior on `praxix.z5`is identical to that of the x86_64 version.
 
 ## The Reason It Wasn't Trivial
 
@@ -51,8 +52,9 @@ And this line in the Dumb-Frotz README, in the CAVEATS:
 This program has only one function: create a version of dumb-frotz that
 is playable on TOPS-20 on a PDP-10.
 
-It does this by acquiring a fork of dumb-frotz 2.32r1, transmogrifying
-it so that the TOPS-20 linker can handle the symbols, and outputting the
+It does this by acquiring a fork of frotz, assembling the sources into a
+single directory, transmogrifying it so that the TOPS-20 compiler
+doesn't choke and its linker can handle the symbols, and outputting the
 mogrified sources.
 
 This isn't as easy as it sounds, because:
