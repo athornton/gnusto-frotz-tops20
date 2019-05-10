@@ -148,6 +148,7 @@ sub create_build_time_files {
     print $oh "#define NO_BLORB yes\n";
     print $oh "#define NO_STRDUP yes\n";
     print $oh "#define NO_LIBGEN_H yes\n";
+    print $oh "#define WEIRD_WORDSIZE yes\n";
     print $oh "#endif /* COMMON_DEFINES_H */\n";
     close $oh;
     open $oh, '>', "$srcdir/version.c";
