@@ -185,7 +185,7 @@ sub create_sed_file {
     for my $k (reverse(sort(keys %symbolmap))) {
 	my $symbol = $symbolmap{$k}{'original'};
 	my $newsym = $symbolmap{$k}{'new'};
-	print $ofh "s/$symbol/$newsym/g\n";
+	print $ofh "s/$symbol(?!\\w)/$newsym/g\n";
     }
 }
 	    
